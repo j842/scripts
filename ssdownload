@@ -10,11 +10,12 @@ NAME
    ssdownload - download a simple secrets from S3. 
    
 SYNOPSIS
-   PASS=password123 ssdownload BUCKET HASH [NAME] > myfile
+   PASS=password123 ssdownload BUCKET NAME > myfile
 
 DESCRIPTION
    Retrieves the given secret, decrypting using the password supplied.
-   See https://github.com/j842/docker-simplesecrets
+   See https://github.com/j842/docker-simplesecrets for the upload mechanism.
+   All paramters must match those used at upload.
    
 RETURN VALUE
    0   - success
@@ -33,15 +34,27 @@ function ungpg {
    fi
    }
 
+function cleanup {
+   rm "$FNAME" "${FNAME}.gpg" "${FNAME}.gpg.gpg" "$FNAME.md5"
+   }
+
+# download SAVEAS S3NAME
+function download {
+   wget -nv -O "$1" "http://${BUCKET}.s3.amazonaws.com/simplesecrets/${2}"  >/dev/null 2>&1
+   if [ $? -ne 0 ] || [ ! -e ${1} ]; then echo "The requested file ${2} wasn't downloaded successfully." >&2 ; exit 1 ; fi   
+   }
+
+
+#----------------------
+
+
 # string is null test
-if [ $# -lt 2 ] || [ $# -gt 3 ]; then echo "Wrong number of arguments." >&2 ; showusage; fi
+if [ $# -ne 2 ]; then echo "Wrong number of arguments." >&2 ; showusage; fi
 
 BUCKET="$1"
-HASH="$2"
-NAME="$3"
+NAME="$2"
 
-if [ -z "$NAME" ]; then NAME="$2"; fi
-if [ -z "$PASS" ]; then echo "PASS environment variable not set" >&2 ; showusage ; fi
+if [ -z "$PASS" ]; then echo "PASS environment variable is not set. Unable to continue." >&2 ; showusage ; fi
 
 COMMANDS=(gpg wget md5sum)
 for CMD in "${COMMANDS[@]}"; do
@@ -50,27 +63,29 @@ done
 
 # Download the encrypted file.
 FNAME="/tmp/newfile"
-if [ -e "$FNAME" ]; then echo "Blocked by existing file at $FNAME" >&2 ; exit 1 ; fi 
+if [ -e "$FNAME" ]; then echo "Blocked by existing file at $FNAME" >&2 ; exit 1 ; fi   # should never happen
 
-wget -nv -O ${FNAME}.gpg.gpg "http://${BUCKET}.s3.amazonaws.com/simplesecrets/${NAME}"  >/dev/null 2>&1
-if [ $? -ne 0 ] || [ ! -e ${FNAME}.gpg.gpg ]; then echo "The requested file wasn't downloaded successfully." >&2 ; exit 1 ; fi
+download "${FNAME}.gpg" "${NAME}.gpg"
+download "${FNAME}.md5" "${NAME}.md5"
 
 # Decrypt.
-ungpg "${FNAME}.gpg.gpg" "$PASS"
-ungpg "${FNAME}.gpg" "$HASH"
+ungpg "${FNAME}.gpg" "$PASS"
 setmd5 "${FNAME}"
 
+STOREDMD5=$(<"${FNAME}.md5")
+
 # Check MD5.
-if [ "${MD5}" != "${HASH}" ]; then
+if [ "${MD5}" != "${STOREDMD5}" ]; then
    echo "File is corrupt." >&2
    echo "Got MD5:  ${MD5}" >&2
-   echo "Expected: ${HASH}" >&2
+   echo "Expected: ${STOREDMD5}" >&2
    echo " " >&2
-   cat ${FNAME} >&2
+   cat "$FNAME" >&2
+   cleanup
    exit 1
 fi
 
 # Output
-cat ${FNAME}
-
+cat "$FNAME"
+cleanup
 exit 0

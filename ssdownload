@@ -42,7 +42,6 @@ NAME="$2"
 if [ -z "$3" ]; then NAME="$3"; fi
 
 if [ -z "${PASS}" ]; then echo "PASS environment variable not set" >&2 ; showusage ; fi
-if [ -e /tmp/file ]; then echo "Blocked by existing file at /tmp/file" >&2 ; exit 1 ; fi 
 
 COMMANDS=(gpg wget md5sum)
 for CMD in "${COMMANDS[@]}"; do
@@ -50,10 +49,11 @@ for CMD in "${COMMANDS[@]}"; do
 done
 
 # Download the encrypted file.
-FNAME="/tmp/file"
-wget -nv -O ${FNAME}.gpg.gpg "http://${BUCKET}.s3.amazonaws.com/simplesecrets/${NAME}"  >/dev/null 2>&1
+FNAME="/tmp/newfile"
+if [ -e "$FNAME" ]; then echo "Blocked by existing file at $FNAME" >&2 ; exit 1 ; fi 
 
-if [ ! -e ${FNAME}.gpg.gpg ]; then echo "The requested file wasn't found." >&2 ; exit 1 ; fi
+wget -nv -O ${FNAME}.gpg.gpg "http://${BUCKET}.s3.amazonaws.com/simplesecrets/${NAME}"  >/dev/null 2>&1
+if [ $? -ne 0 ] || [ ! -e ${FNAME}.gpg.gpg ]; then echo "The requested file wasn't downloaded successfully." >&2 ; exit 1 ; fi
 
 # Decrypt.
 ungpg "${FNAME}.gpg.gpg" "${FNAME}.gpg" "$PASS"

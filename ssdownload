@@ -1,6 +1,7 @@
 #!/bin/bash
 
 function command_exists { command -v "$1" >/dev/null 2>&1 ; }
+function setmd5 { MD5=$(md5sum "${1}") ; MD5="${MD5%% *}" ; }
 
 function showusage {
 cat <<EOF >&2
@@ -23,6 +24,15 @@ EOF
    exit 1  
 }
 
+# ungpg INPUT OUTPUT PASSPHRASE
+function ungpg { 
+   gpg --yes --batch --output "$2" --decrypt --passphrase="$3" --symmetric "$1" >/dev/null 2>&1 ; 
+   if [ ! -e "$2" ]; then
+      echo "Decyption failed. Passphrase or hash likely incorrect."
+      exit 1
+   fi
+   }
+
 # string is null test
 if [ $# -lt 2 ] || [ $# -gt 3 ]; then echo "Wrong number of arguments." >&2 ; showusage; fi
 
@@ -31,29 +41,26 @@ HASH="$2"
 NAME="$2"
 if [ -z "$3" ]; then NAME="$3"; fi
 
-if [ -z "${PASS}" ]; then echo "PASS environment variable not set." >&2 ; showusage ; fi
-if [ -e /tmp/${HASH} ]; then echo "Blocked by existing file at /tmp/${HASH}." >&2 ; exit 1 ; fi 
+if [ -z "${PASS}" ]; then echo "PASS environment variable not set" >&2 ; showusage ; fi
+if [ -e /tmp/file ]; then echo "Blocked by existing file at /tmp/file" >&2 ; exit 1 ; fi 
 
 COMMANDS=(gpg wget md5sum)
 for CMD in "${COMMANDS[@]}"; do
   if ! command_exists "${CMD}" ; then echo "ssdownload requires ${CMD}" >&2 ; exit 1 ; fi
 done
 
-FNAME="/tmp/${HASH}.gpg"
-wget -nv -O ${FNAME} "http://${BUCKET}.s3.amazonaws.com/simplesecrets/${NAME}_v1"  >/dev/null 2>&1
+# Download the encrypted file.
+FNAME="/tmp/file"
+wget -nv -O ${FNAME}.gpg.gpg "http://${BUCKET}.s3.amazonaws.com/simplesecrets/${NAME}"  >/dev/null 2>&1
 
-if [ ! -e ${FNAME} ]; then
-   echo "The requested file wasn't found." >&2
-   exit 1
-fi
+if [ ! -e ${FNAME}.gpg.gpg ]; then echo "The requested file wasn't found." >&2 ; exit 1 ; fi
 
-gpg --yes --batch --passphrase="${PASS}" ${FNAME} >/dev/null 2>&1
-if [ ! -e /tmp/${HASH} ]; then echo "Decrypting failed. Passphrase incorrect." >&2 ; exit 1 ; fi 
-mv /tmp/${HASH} ${FNAME}
-gpg --yes --batch --passphrase="${HASH}" ${FNAME} >/dev/null 2>&1
-if [ ! -e /tmp/${HASH} ]; then echo "Decrypting failed. Hash incorrect." >&2 ; exit 1 ; fi 
+# Decrypt.
+ungpg "${FNAME}.gpg.gpg" "${FNAME}.gpg" "$PASS"
+ungpg "${FNAME}.gpg" "${FNAME}" "$HASH"
+setmd5 "${FNAME}"
 
-MD5=($(md5sum /tmp/${HASH}))
+# Check MD5.
 if [ "${MD5}" != "${HASH}" ]; then
    echo "File is corrupt." >&2
    echo "Got MD5:  ${MD5}" >&2
@@ -63,9 +70,7 @@ if [ "${MD5}" != "${HASH}" ]; then
    exit 1
 fi
 
-cat /tmp/${HASH}
-rm -f /tmp/${HASH}
-
-if [ -e /tmp/${HASH} ]; then echo "Unable to delete the decrypted file at /tmp/${HASH}." >&2 ; exit 1 ; fi 
+# Output
+cat ${FNAME}
 
 exit 0

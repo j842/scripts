@@ -19,8 +19,11 @@ fi
 function checkinstall {
 if [ $(dpkg-query -W -f='${Status}' ${1} 2>/dev/null | grep -c "ok installed") -eq 0 ];
 then
-  apt-get update
-  apt-get install -y ${1};
+  echo "Installing ${1}. Updating..." >&2
+  apt-get update >/dev/null 2>&1
+  echo "Installing..." >&2
+  apt-get install -y ${1} >/dev/null 2>&1
+  echo "Done.">&2
   RVAL=0
 fi
 }

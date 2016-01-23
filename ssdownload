@@ -24,10 +24,10 @@ EOF
    exit 1  
 }
 
-# ungpg INPUT OUTPUT PASSPHRASE
+# ungpg INPUT PASSPHRASE
 function ungpg { 
-   gpg --yes --batch --passphrase="$3" --output="$2" -c "$1" > /dev/null 2>&1 ;
-   if [ ! -e "$2" ]; then
+   gpg --yes --batch --passphrase="$3" "$1" > /dev/null 2>&1 ;
+   if [ ! -e "${1%.*}" ]; then
       echo "Decyption failed. Passphrase or hash likely incorrect."
       exit 1
    fi
@@ -56,8 +56,8 @@ wget -nv -O ${FNAME}.gpg.gpg "http://${BUCKET}.s3.amazonaws.com/simplesecrets/${
 if [ $? -ne 0 ] || [ ! -e ${FNAME}.gpg.gpg ]; then echo "The requested file wasn't downloaded successfully." >&2 ; exit 1 ; fi
 
 # Decrypt.
-ungpg "${FNAME}.gpg.gpg" "${FNAME}.gpg" "$PASS"
-ungpg "${FNAME}.gpg" "${FNAME}" "$HASH"
+ungpg "${FNAME}.gpg.gpg" "$PASS"
+ungpg "${FNAME}.gpg" "$HASH"
 setmd5 "${FNAME}"
 
 # Check MD5.

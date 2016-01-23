@@ -65,8 +65,8 @@ if [ "${MD5}" != "${HASH}" ]; then
    echo "File is corrupt." >&2
    echo "Got MD5:  ${MD5}" >&2
    echo "Expected: ${HASH}" >&2
-   # Don't leave unencrypted file sitting around.
-   rm /tmp/${HASH}
+   echo " " >&2
+   cat ${FNAME} >&2
    exit 1
 fi
 

@@ -38,10 +38,10 @@ if [ $# -lt 2 ] || [ $# -gt 3 ]; then echo "Wrong number of arguments." >&2 ; sh
 
 BUCKET="$1"
 HASH="$2"
-NAME="$2"
-if [ -z "$3" ]; then NAME="$3"; fi
+NAME="$3"
 
-if [ -z "${PASS}" ]; then echo "PASS environment variable not set" >&2 ; showusage ; fi
+if [ -z "$NAME" ]; then NAME="$2"; fi
+if [ -z "$PASS" ]; then echo "PASS environment variable not set" >&2 ; showusage ; fi
 
 COMMANDS=(gpg wget md5sum)
 for CMD in "${COMMANDS[@]}"; do

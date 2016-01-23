@@ -29,19 +29,19 @@ EOF
 function ungpg { 
    gpg --yes --batch --passphrase="$2" "$1" > /dev/null 2>&1 ;
    if [ ! -e "${1%.*}" ]; then
-      echo "Decyption failed. Passphrase or hash likely incorrect."
+      echo "The requested file exists but decyption failed. Incorrect passphrase?" >&2
       exit 1
    fi
    }
 
 function cleanup {
-   rm "$FNAME" "${FNAME}.gpg" "${FNAME}.gpg.gpg" "$FNAME.md5"
+   rm "$FNAME" "${FNAME}.gpg" "$FNAME.md5"
    }
 
 # download SAVEAS S3NAME
 function download {
    wget -nv -O "$1" "http://${BUCKET}.s3.amazonaws.com/simplesecrets/${2}"  >/dev/null 2>&1
-   if [ $? -ne 0 ] || [ ! -e ${1} ]; then echo "The requested file ${2} wasn't downloaded successfully." >&2 ; exit 1 ; fi   
+   if [ $? -ne 0 ] || [ ! -e ${1} ]; then echo "The requested file doesn't exist." >&2 ; exit 1 ; fi   
    }
 
 

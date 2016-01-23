@@ -1,0 +1,66 @@
+#!/bin/bash
+
+function command_exists { command -v "$1" >/dev/null 2>&1 ; }
+
+function showusage {
+cat <<EOF >&2
+
+NAME
+   ssdownload - download a simple secrets from S3
+   
+SYNOPSIS
+   PASS=password123 ssdownload -b BUCKET HASH > myfile
+
+DESCRIPTION
+   Retrieves the given secret, decrypting using the password supplied.
+   
+RETURN VALUE
+   0   - success
+   1   - error
+   
+EOF
+   exit 1  
+}
+
+# string is null test
+if [ $# -ne 2 ]; then echo "Wrong number of arguments." >&2 ; showusage; fi
+
+BUCKET="$1"
+HASH="$2"
+
+if [ -z "${PASS}" ]; then echo "PASS environment variable not set." >&2 ; showusage ; fi
+if [ -e /tmp/${HASH} ]; then echo "Blocked by existing file at /tmp/${HASH}." >&2 ; exit 1 ; fi 
+
+COMMANDS=(gpg wget md5sum)
+for CMD in "${COMMANDS[@]}"; do
+  if ! command_exists "${CMD}" ; then echo "ssdownload requires ${CMD}" >&2 ; exit 1 ; fi
+done
+
+FNAME="/tmp/${HASH}.gpg"
+wget -nv -O ${FNAME} "http://${BUCKET}.s3.amazonaws.com/simplesecrets/${HASH}"  >/dev/null 2>&1
+
+if [ ! -e ${FNAME} ]; then
+   echo "The requested file wasn't found." >&2
+   exit 1
+fi
+
+gpg --yes --batch --passphrase="${PASS}" ${FNAME} >/dev/null 2>&1
+
+if [ ! -e /tmp/${HASH} ]; then echo "Decrypting failed." >&2 ; exit 1 ; fi 
+
+MD5=($(md5sum /tmp/${HASH}))
+if [ "${MD5}" != "${HASH}" ]; then
+   echo "File is corrupt." >&2
+   echo "Got MD5:  ${MD5}" >&2
+   echo "Expected: ${HASH}" >&2
+   # Don't leave unencrypted file sitting around.
+   rm /tmp/${HASH}
+   exit 1
+fi
+
+cat /tmp/${HASH}
+rm -f /tmp/${HASH}
+
+if [ -e /tmp/${HASH} ]; then echo "Unable to delete the decrypted file at /tmp/${HASH}." >&2 ; exit 1 ; fi 
+
+exit 0

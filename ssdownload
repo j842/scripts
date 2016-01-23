@@ -26,7 +26,7 @@ EOF
 
 # ungpg INPUT PASSPHRASE
 function ungpg { 
-   gpg --yes --batch --passphrase="$3" "$1" > /dev/null 2>&1 ;
+   gpg --yes --batch --passphrase="$2" "$1" > /dev/null 2>&1 ;
    if [ ! -e "${1%.*}" ]; then
       echo "Decyption failed. Passphrase or hash likely incorrect."
       exit 1

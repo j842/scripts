@@ -6,13 +6,14 @@ function showusage {
 cat <<EOF >&2
 
 NAME
-   ssdownload - download a simple secrets from S3
+   ssdownload - download a simple secrets from S3. 
    
 SYNOPSIS
    PASS=password123 ssdownload -b BUCKET HASH > myfile
 
 DESCRIPTION
    Retrieves the given secret, decrypting using the password supplied.
+   See https://github.com/j842/docker-simplesecrets
    
 RETURN VALUE
    0   - success

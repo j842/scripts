@@ -9,7 +9,7 @@ NAME
    ssdownload - download a simple secrets from S3. 
    
 SYNOPSIS
-   PASS=password123 ssdownload -b BUCKET HASH > myfile
+   PASS=password123 ssdownload BUCKET HASH [NAME] > myfile
 
 DESCRIPTION
    Retrieves the given secret, decrypting using the password supplied.
@@ -24,10 +24,12 @@ EOF
 }
 
 # string is null test
-if [ $# -ne 2 ]; then echo "Wrong number of arguments." >&2 ; showusage; fi
+if [ $# -lt 2 ] || [ $# -gt 3 ]; then echo "Wrong number of arguments." >&2 ; showusage; fi
 
 BUCKET="$1"
 HASH="$2"
+NAME="$2"
+if [ -z "$3" ]; then NAME="$3"; fi
 
 if [ -z "${PASS}" ]; then echo "PASS environment variable not set." >&2 ; showusage ; fi
 if [ -e /tmp/${HASH} ]; then echo "Blocked by existing file at /tmp/${HASH}." >&2 ; exit 1 ; fi 
@@ -38,7 +40,7 @@ for CMD in "${COMMANDS[@]}"; do
 done
 
 FNAME="/tmp/${HASH}.gpg"
-wget -nv -O ${FNAME} "http://${BUCKET}.s3.amazonaws.com/simplesecrets/${HASH}"  >/dev/null 2>&1
+wget -nv -O ${FNAME} "http://${BUCKET}.s3.amazonaws.com/simplesecrets/${NAME}_v1"  >/dev/null 2>&1
 
 if [ ! -e ${FNAME} ]; then
    echo "The requested file wasn't found." >&2
@@ -46,8 +48,10 @@ if [ ! -e ${FNAME} ]; then
 fi
 
 gpg --yes --batch --passphrase="${PASS}" ${FNAME} >/dev/null 2>&1
-
-if [ ! -e /tmp/${HASH} ]; then echo "Decrypting failed." >&2 ; exit 1 ; fi 
+if [ ! -e /tmp/${HASH} ]; then echo "Decrypting failed. Passphrase incorrect." >&2 ; exit 1 ; fi 
+mv /tmp/${HASH} ${FNAME}
+gpg --yes --batch --passphrase="${HASH}" ${FNAME} >/dev/null 2>&1
+if [ ! -e /tmp/${HASH} ]; then echo "Decrypting failed. Hash incorrect." >&2 ; exit 1 ; fi 
 
 MD5=($(md5sum /tmp/${HASH}))
 if [ "${MD5}" != "${HASH}" ]; then

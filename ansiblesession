@@ -17,7 +17,7 @@ DESCRIPTION
    See https://github.com/j842/docker-ansible for information about the Docker 
    container this script configures and uses.
 
-RETURN VALUE
+EXIT VALUES
    0   - success
    1   - error
    3   - no change
@@ -28,6 +28,8 @@ EOF
 
 #------ VARIABLES -------------------
 
+RVAL=3
+
 CONTAINER_SHORTNAME="ansible"
 CONTAINER_PREFIX=j842
 CONTAINER_NAME="${CONTAINER_PREFIX}/${CONTAINER_SHORTNAME}"
@@ -37,29 +39,82 @@ if [ -z "$NAME" ] && [ "$1" != "list" ]; then showusage ; fi
 
 VOLUME_NAME="ansible-config-${NAME}"
 VOLUME_MOUNT="/config"
-#VOLUME_VCMD="${VOLUME_NAME}:${VOLUME_MOUNT}"
+VOLUME_VCMD="${VOLUME_NAME}:${VOLUME_MOUNT}"
 
 ANSIBLE_NAME="ansible-data-${NAME}"
 # the path that the ansible playbooks are installed in.
 # this is also hardcoded in Dockerfile
 ANSIBLE_MOUNT="/data"
+ANSIBLE_VCMD="${ANSIBLE_NAME}:${ANSIBLE_MOUNT}"
 
 #------------------------------------
 
+function runcontainer {
+   EXTRAOPTIONS="$1"
+   CONTAINERCOMMAND="$2"
+   
+   MYCMD="docker run -ti --name=ansible-${NAME} -h ${HOSTNAME}-ansible -v ${VOLUME_VCMD} -v ${ANSIBLE_VCMD} ${EXTRAOPTIONS} ${CONTAINER_NAME} ${CONTAINERCOMMAND}"
+   RESULT=$(eval "$MYCMD")
+   docker rm ansible-${NAME}   
+}
 
-function copypath {
+
+function copytocontainer {
    SRCPATH=$1
    DESTPATH=$2
    
+   TEMPF="$(mktemp -d)"
+   if [ -d ${SRCPATH} ]; then
+      # copy folder of stuff
+      rsync -a "${SRCPATH}/" "$TEMPF"
+   else
+      # copy single files
+      cp "$SRCFILE" "$TEMPF"
+   fi
+   
+#   echo docker run --name=ansible-"${NAME}" -h "${HOSTNAME}"-ansible -ti -v "${VOLUME_VCMD}" -v "${ANSIBLE_VCMD}" -v "${TEMPF}":/tocopy "${CONTAINER_NAME}" rsync -ai /tocopy/ "${DESTPATH}"
+  
+   echo $MYCOMMAND | base64 -d
+   
    # use rsync to copy
+   CHANGED=$( docker run -ti \
+              --name=ansible-${NAME} -h ${HOSTNAME}-ansible \
+              -v ${VOLUME_VCMD} \
+              -v ${ANSIBLE_VCMD} \
+              -v ${TEMPF}:/tocopy ${CONTAINER_NAME} \
+              rsync -ai /tocopy/ ${DESTPATH} )
+   if [ ! -n "$CHANGED" ]; then echo "Files were changed." ; RVAL=0 ; fi
+   docker rm ansible-${NAME}   
+   rm -rf "$TEMPF"
 }
 
 
 function command_exists { command -v "$1" >/dev/null 2>&1 ; }
 
+
+function ensurevolexists {
+  docker volume ls | grep "$1" > /dev/null
+  if [ $? -ne 0 ] ; then
+     echo Creating volume "$1"
+     docker volume create --name "$1"
+     RVAL=0
+  fi
+}
+
 #   ansiblesession init NAME            - Init volumes for session called NAME.
 function init {
+   ensurevolexists "${VOLUME_NAME}"
+   ensurevolexists "${ANSIBLE_NAME}"   
    
+   rm -rf /tmp/config ; mkdir /tmp/config
+cat <<EOF >/tmp/config/ansible.cfg
+[defaults]
+host_key_checking = false
+pipelining = true
+EOF
+   mkdir /tmp/config/sshkeys
+   
+   copytocontainer /tmp/config /config
 }
 
 

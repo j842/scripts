@@ -1,0 +1,93 @@
+#!/bin/bash
+
+function showusage {
+cat <<EOF
+
+NAME
+   ansiblesession - configure and start ansiblesession
+   
+SYNOPSIS
+   ansiblesession init NAME            - Init volumes for session called NAME.
+   ansiblesession setcfg NAME CFGFILE  - Update .ansible.cfg with CFGFILE.
+   ansiblesession copykeys NAME PATH   - Copy the ssh keys to /root/.ssh/
+   ansiblesession start NAME           - start ansible session NAME.
+   ansiblesession list                 - list available ansible sessions.
+   
+DESCRIPTION
+   See https://github.com/j842/docker-ansible for information about the Docker 
+   container this script configures and uses.
+
+RETURN VALUE
+   0   - success
+   1   - error
+   3   - no change
+   
+EOF
+   exit 1
+}
+
+#------ VARIABLES -------------------
+
+CONTAINER_SHORTNAME="ansible"
+CONTAINER_PREFIX=j842
+CONTAINER_NAME="${CONTAINER_PREFIX}/${CONTAINER_SHORTNAME}"
+
+NAME="$2"
+if [ -z "$NAME" ] && [ "$1" != "list" ]; then showusage ; fi
+
+VOLUME_NAME="ansible-config-${NAME}"
+VOLUME_MOUNT="/config"
+#VOLUME_VCMD="${VOLUME_NAME}:${VOLUME_MOUNT}"
+
+ANSIBLE_NAME="ansible-data-${NAME}"
+# the path that the ansible playbooks are installed in.
+# this is also hardcoded in Dockerfile
+ANSIBLE_MOUNT="/data"
+
+#------------------------------------
+
+
+function copypath {
+   SRCPATH=$1
+   DESTPATH=$2
+   
+   # use rsync to copy
+}
+
+
+function command_exists { command -v "$1" >/dev/null 2>&1 ; }
+
+#   ansiblesession init NAME            - Init volumes for session called NAME.
+function init {
+   
+}
+
+
+case "$1" in
+   init)
+      init
+      ;;
+      
+   setcfg)
+      setcfg "$3"
+      ;;
+      
+   copykeys)
+      copykeys "$3"
+      ;;
+      
+   start)
+      start
+      ;;
+      
+   list)
+      list
+      ;;
+      
+   *)
+      showusage
+      ;;
+esac
+
+#FNAME=$(basename $BASH_SOURCE) 
+

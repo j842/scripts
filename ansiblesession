@@ -10,7 +10,10 @@ SYNOPSIS
    ansiblesession init NAME            - Init volumes for session called NAME.
    ansiblesession setcfg NAME CFGFILE  - Update .ansible.cfg with CFGFILE.
    ansiblesession copykeys NAME PATH   - Copy the ssh keys to /root/.ssh/
+   
    ansiblesession start NAME           - start ansible session NAME.
+   
+   ansiblesession nuke NAME            - remove volume containers for NAME.
    ansiblesession list                 - list available ansible sessions.
    
 DESCRIPTION
@@ -35,7 +38,6 @@ CONTAINER_PREFIX=j842
 CONTAINER_NAME="${CONTAINER_PREFIX}/${CONTAINER_SHORTNAME}"
 
 NAME="$2"
-if [ -z "$NAME" ] && [ "$1" != "list" ]; then showusage ; fi
 
 VOLUME_NAME="ansible-config-${NAME}"
 VOLUME_MOUNT="/config"
@@ -49,16 +51,6 @@ ANSIBLE_VCMD="${ANSIBLE_NAME}:${ANSIBLE_MOUNT}"
 
 #------------------------------------
 
-function runcontainer {
-   EXTRAOPTIONS="$1"
-   CONTAINERCOMMAND="$2"
-   
-   MYCMD="docker run -ti --name=ansible-${NAME} -h ${HOSTNAME}-ansible -v ${VOLUME_VCMD} -v ${ANSIBLE_VCMD} ${EXTRAOPTIONS} ${CONTAINER_NAME} ${CONTAINERCOMMAND}"
-   RESULT=$(eval "$MYCMD")
-   docker rm ansible-${NAME}   
-}
-
-
 function copytocontainer {
    SRCPATH=$1
    DESTPATH=$2
@@ -71,23 +63,27 @@ function copytocontainer {
       # copy single files
       cp "$SRCFILE" "$TEMPF"
    fi
-   
-#   echo docker run --name=ansible-"${NAME}" -h "${HOSTNAME}"-ansible -ti -v "${VOLUME_VCMD}" -v "${ANSIBLE_VCMD}" -v "${TEMPF}":/tocopy "${CONTAINER_NAME}" rsync -ai /tocopy/ "${DESTPATH}"
   
-   echo $MYCOMMAND | base64 -d
-   
-   # use rsync to copy
-   CHANGED=$( docker run -ti \
-              --name=ansible-${NAME} -h ${HOSTNAME}-ansible \
-              -v ${VOLUME_VCMD} \
-              -v ${ANSIBLE_VCMD} \
-              -v ${TEMPF}:/tocopy ${CONTAINER_NAME} \
-              rsync -ai /tocopy/ ${DESTPATH} )
-   if [ ! -n "$CHANGED" ]; then echo "Files were changed." ; RVAL=0 ; fi
-   docker rm ansible-${NAME}   
+   RESULT=$(docker run -i -t --name=ansible-${NAME} -h ${HOSTNAME}-ansible \
+            -v ${VOLUME_VCMD} \
+            -v ${ANSIBLE_VCMD} \
+           -v ${TEMPF}:/tocopy \
+            ${CONTAINER_NAME}  \
+            rsync -ai /tocopy/ ${DESTPATH}
+            )
+   if [ -n "$RESULT" ]; then echo "Files were changed." ; RVAL=0 ; fi
+   docker rm ansible-${NAME}
    rm -rf "$TEMPF"
 }
 
+function start {
+   docker run -i -t --name=ansible-"${NAME}" -h "${HOSTNAME}"-ansible \
+            -v "${VOLUME_VCMD}" \
+            -v "${ANSIBLE_VCMD}" \
+            "${CONTAINER_NAME}"  
+            
+   docker rm ansible-"${NAME}"
+}
 
 function command_exists { command -v "$1" >/dev/null 2>&1 ; }
 
@@ -117,26 +113,45 @@ EOF
    copytocontainer /tmp/config /config
 }
 
+function namelist {
+   NAMELIST=$(docker volume ls | grep ansible-config- | sed s/^.*config-//)
+}
+
 
 case "$1" in
    init)
+      if [ -z "$NAME" ]; then showusage ; fi
       init
       ;;
       
    setcfg)
+      if [ -z "$NAME" ]; then showusage ; fi
       setcfg "$3"
       ;;
       
    copykeys)
+      if [ -z "$NAME" ]; then showusage ; fi
       copykeys "$3"
       ;;
       
    start)
+      if [ -z "$NAME" ]; then showusage ; fi
       start
       ;;
       
+   nuke)
+      if [ -z "$NAME" ]; then showusage ; fi
+      docker volume rm "$VOLUME_NAME"
+      docker volume rm "$ANSIBLE_NAME"
+      ;;
+      
+   clean)
+      docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v /etc:/etc spotify/docker-gc
+      ;;
+      
    list)
-      list
+      namelist
+      echo "$NAMELIST"
       ;;
       
    *)

@@ -11,15 +11,20 @@ NAME
    
 SYNOPSIS
    PASS=password123 ssdownload BUCKET NAME > myfile
+   PASS=password123 ssdownload BUCKET NAME OUTPUTFILE
 
 DESCRIPTION
    Retrieves the given secret, decrypting using the password supplied.
    See https://github.com/j842/docker-simplesecrets for the upload mechanism.
-   All paramters must match those used at upload.
+   All parameters must match those used at upload.
+   
+   If OUTPUTFILE is specified then it checks whether changes have been made
+   before outputting to that file.
    
 RETURN VALUE
    0   - success
    1   - error
+   3   - no changes made (when OUTPUTFILE specified)
    
 EOF
    exit 1  
@@ -49,10 +54,11 @@ function download {
 
 
 # string is null test
-if [ $# -ne 2 ]; then echo "Wrong number of arguments." >&2 ; showusage; fi
+if [ $# -lt 2 ] || [ $# -gt 3 ]; then echo "Wrong number of arguments." >&2 ; showusage; fi
 
 BUCKET="$1"
 NAME="$2"
+OUTPUTFILE="$3"
 
 if [ -z "$PASS" ]; then echo "PASS environment variable is not set. Unable to continue." >&2 ; showusage ; fi
 
@@ -86,6 +92,19 @@ if [ "${MD5}" != "${STOREDMD5}" ]; then
 fi
 
 # Output
-cat "$FNAME"
+RVAL=0
+if [ -z "$OUTPUTFILE" ]; then
+   cat "$FNAME"
+else
+   if [ -e "$OUTPUTFILE" ]; then
+      setmd5 "$OUTPUTFILE"
+      if [ "${MD5}" = "${STOREDMD5}" ]; then
+         RVAL=3
+      fi
+   fi
+   
+   if [ $RVAL -eq 0 ]; then cp "$FNAME" "$OUTPUTFILE" ; echo "Updated $OUTPUTFILE (MD5=${STOREDMD5})." ; fi
+fi
+
 cleanup
-exit 0
+exit $RVAL

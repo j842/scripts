@@ -1,20 +1,30 @@
 #!/bin/bash
 
+function namefail {
+   echo "Name of this cript must be ansiblesession-SESSIONNAME, where SESSIONNAME can be any word."; 
+   exit 1
+}
+
+FNAMEFULL=$(basename $BASH_SOURCE) 
+FNAME=${FNAMEFULL##*-}
+if [ "$FNAME" = "$FNAMEFULL" ]; then namefail ; fi
+if [ -z "$FNAME" ]; then namefail ; fi
+#echo "NAME IS $FNAME"
+
 function showusage {
 cat <<EOF
 
 NAME
-   ansiblesession - configure and start ansiblesession
+   ansiblesession-${FNAME} - configure and start the ansible session '${FNAME}'.
    
 SYNOPSIS
-   ansiblesession init NAME            - Init volumes for session called NAME.
-   ansiblesession setcfg NAME CFGFILE  - Update .ansible.cfg with CFGFILE.
-   ansiblesession copykeys NAME PATH   - Copy the ssh keys to /root/.ssh/
+   ansiblesession-${FNAME}                  - start ansible session ${FNAME}.
+   ansiblesession-${FNAME} init             - Init volumes for session ${FNAME}.
+   ansiblesession-${FNAME} setcfg CFGFILE   - Update .ansible.cfg with CFGFILE.
+   ansiblesession-${FNAME} copykeys PATH    - Copy the ssh keys to /root/.ssh/
    
-   ansiblesession start NAME           - start ansible session NAME.
-   
-   ansiblesession nuke NAME            - remove volume containers for NAME.
-   ansiblesession list                 - list available ansible sessions.
+   ansiblesession-${FNAME} nuke             - remove volume containers for ${FNAME}.
+   ansiblesession-${FNAME} list             - list all available ansible session volumes.
    
 DESCRIPTION
    See https://github.com/j842/docker-ansible for information about the Docker 
@@ -31,6 +41,7 @@ EOF
 
 #------ VARIABLES -------------------
 
+
 RVAL=3
 
 CONTAINER_SHORTNAME="ansible"
@@ -39,11 +50,11 @@ CONTAINER_NAME="${CONTAINER_PREFIX}/${CONTAINER_SHORTNAME}"
 
 NAME="$2"
 
-VOLUME_NAME="ansible-config-${NAME}"
+VOLUME_NAME="ansible-config-${FNAME}"
 VOLUME_MOUNT="/config"
 VOLUME_VCMD="${VOLUME_NAME}:${VOLUME_MOUNT}"
 
-ANSIBLE_NAME="ansible-data-${NAME}"
+ANSIBLE_NAME="ansible-data-${FNAME}"
 # the path that the ansible playbooks are installed in.
 # this is also hardcoded in Dockerfile
 ANSIBLE_MOUNT="/data"
@@ -58,13 +69,13 @@ function copytocontainer {
    TEMPF="$(mktemp -d)"
    if [ -d ${SRCPATH} ]; then
       # copy folder of stuff
-      rsync -a "${SRCPATH}/" "$TEMPF"
+      rsync -a "${SRCPATH%/}/" "$TEMPF"
    else
       # copy single files
       cp "$SRCFILE" "$TEMPF"
    fi
   
-   RESULT=$(docker run -i -t --name=ansible-${NAME} -h ${HOSTNAME}-ansible \
+   RESULT=$(docker run -i -t --name=ansible-${FNAME} -h ${HOSTNAME}-ansible \
             -v ${VOLUME_VCMD} \
             -v ${ANSIBLE_VCMD} \
            -v ${TEMPF}:/tocopy \
@@ -72,17 +83,25 @@ function copytocontainer {
             rsync -ai /tocopy/ ${DESTPATH}
             )
    if [ -n "$RESULT" ]; then echo "Files were changed." ; RVAL=0 ; fi
-   docker rm ansible-${NAME}
+   docker rm "ansible-${FNAME}"
    rm -rf "$TEMPF"
 }
 
+function setcfg {
+   copytocontainer $1 /config/ansible.cfg
+}
+
+function copykeys {
+   copytocontainer "${1%/}" /config/sshkeys
+}
+
 function start {
-   docker run -i -t --name=ansible-"${NAME}" -h "${HOSTNAME}"-ansible \
+   docker run -i -t --name=ansible-"${FNAME}" -h "${HOSTNAME}"-ansible \
             -v "${VOLUME_VCMD}" \
             -v "${ANSIBLE_VCMD}" \
             "${CONTAINER_NAME}"  
             
-   docker rm ansible-"${NAME}"
+   docker rm ansible-"${FNAME}"
 }
 
 function command_exists { command -v "$1" >/dev/null 2>&1 ; }
@@ -120,27 +139,22 @@ function namelist {
 
 case "$1" in
    init)
-      if [ -z "$NAME" ]; then showusage ; fi
       init
       ;;
       
    setcfg)
-      if [ -z "$NAME" ]; then showusage ; fi
-      setcfg "$3"
+      setcfg "$2"
       ;;
       
    copykeys)
-      if [ -z "$NAME" ]; then showusage ; fi
-      copykeys "$3"
+      copykeys "$2"
       ;;
       
-   start)
-      if [ -z "$NAME" ]; then showusage ; fi
+   "")
       start
       ;;
       
    nuke)
-      if [ -z "$NAME" ]; then showusage ; fi
       docker volume rm "$VOLUME_NAME"
       docker volume rm "$ANSIBLE_NAME"
       ;;
@@ -159,5 +173,5 @@ case "$1" in
       ;;
 esac
 
-#FNAME=$(basename $BASH_SOURCE) 
+
 

@@ -1,7 +1,12 @@
 #!/bin/bash
 
-function command_exists { command -v "$1" >/dev/null 2>&1 ; }
-function setmd5 { MD5=$(md5sum "${1}") ; MD5="${MD5%% *}" ; }
+# ------------------------------------------------------------------
+#
+#  ssdownload
+#  Download secrets that have been stored with docker-simplesecrets
+#     https://github.com/j842/docker-simplesecrets
+#
+# ------------------------------------------------------------------
 
 function showusage {
 cat <<EOF >&2
@@ -30,9 +35,20 @@ EOF
    exit 1  
 }
 
+
+# command_exists COMMAND
+# check if the COMMAND exists on the host
+function command_exists { command -v "$1" >/dev/null 2>&1 ; }
+
+# setmd5 FILENAME
+# set the MD5 variable to the checksum for FILENAME.
+function setmd5 { MD5=$(md5sum "${1}") ; MD5="${MD5%% *}" ; }
+
+
 # ungpg INPUT PASSPHRASE
 function ungpg { 
    gpg --yes --batch --passphrase="$2" "$1" > /dev/null 2>&1 ;
+   # check that the file with the .gpg removed exists.
    if [ ! -e "${1%.*}" ]; then
       echo "The requested file exists but decyption failed. Incorrect passphrase?" >&2
       exit 1
@@ -52,8 +68,7 @@ function download {
 
 #----------------------
 
-
-# string is null test
+# Requires 2 or 3 arguments.
 if [ $# -lt 2 ] || [ $# -gt 3 ]; then echo "Wrong number of arguments." >&2 ; showusage; fi
 
 BUCKET="$1"
@@ -99,10 +114,12 @@ else
    if [ -e "$OUTPUTFILE" ]; then
       setmd5 "$OUTPUTFILE"
       if [ "${MD5}" = "${STOREDMD5}" ]; then
+         # existing file has same MD5, so exit with value 3 for ansible.
          RVAL=3
       fi
    fi
    
+   # empty target or MD5 doesn't match, so copy.
    if [ $RVAL -eq 0 ]; then cp "$FNAME" "$OUTPUTFILE" ; echo "Updated $OUTPUTFILE (MD5=${STOREDMD5})." ; fi
 fi
 
